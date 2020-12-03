@@ -66,6 +66,9 @@ SCHEMA_VERSION = '0.8'
 # though it's just a str in each individual file right now.
 WestCommandsType = Union[str, List[str]]
 
+# Type for the submodules value passed through the manifest file.
+SubmodulesType = List[Dict]
+
 # Type for the importer callback passed to the manifest constructor.
 # (ImportedContentType is just an alias for what it gives back.)
 ImportedContentType = Optional[Union[str, List[str]]]
@@ -514,6 +517,7 @@ class Project:
     def __init__(self, name: str, url: str,
                  revision: Optional[str] = None,
                  path: Optional[PathType] = None,
+                 submodules: Optional[SubmodulesType] = None,
                  clone_depth: Optional[int] = None,
                  west_commands: Optional[WestCommandsType] = None,
                  topdir: Optional[PathType] = None,
@@ -527,6 +531,7 @@ class Project:
         :param url: fetch URL
         :param revision: fetch revision
         :param path: path (relative to topdir), or None for *name*
+        :param submodules: submodules to pull within the project
         :param clone_depth: depth to use for initial clone
         :param west_commands: path to a west commands specification YAML
             file in the project, relative to its base directory,
@@ -538,6 +543,7 @@ class Project:
 
         self.name = name
         self.url = url
+        self.submodules = submodules
         self.revision = revision or _DEFAULT_REV
         self.clone_depth = clone_depth
         self.path = os.fspath(path or name)
@@ -843,6 +849,7 @@ class ManifestProject(Project):
 
         # Pretending that this is a Project, even though it's not (#327)
         self.url: str = ''
+        self.submodules = None
         self.revision: str = 'HEAD'
         self.clone_depth: Optional[int] = None
         # The following type: ignore is necessary since every Project
@@ -1651,7 +1658,8 @@ class Manifest:
         path = (ctx.path_prefix / pfx / pd.get('path', name)).as_posix()
 
         ret = Project(name, url, pd.get('revision', defaults.revision),
-                      path, clone_depth=pd.get('clone-depth'),
+                      path, submodules=pd.get('submodules'),
+                      clone_depth=pd.get('clone-depth'),
                       west_commands=pd.get('west-commands'),
                       topdir=self.topdir, remote_name=remote)
 

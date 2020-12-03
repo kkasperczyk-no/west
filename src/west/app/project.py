@@ -867,6 +867,15 @@ class Update(_ProjectCommand):
         self.manifest = Manifest.from_file(topdir=self.topdir,
                                            importer=self.update_importer)
 
+    def update_submodules(self, project, submodules, call_location):
+        # Updates given list of project submodules by using
+        # 'git submodule update --init' command from the location passed
+        # through the call_location parameter value.
+        if submodules:
+            for submodule in submodules:
+                project.git(['-C', call_location, 'submodule', 'update',
+                             '--init', submodule['path']])
+
     def update(self, project):
         if self.args.stats:
             stats = dict()
@@ -931,6 +940,10 @@ class Update(_ProjectCommand):
             if take_stats:
                 stats['checkout new manifest-rev'] = perf_counter() - start
             _post_checkout_help(project, current_branch, sha, is_ancestor)
+
+        # Update project submodules, if it has any.
+        self.update_submodules(project, project.submodules,
+                               os.path.join(self.topdir, project.path))
 
         # Print performance statistics.
         if take_stats:

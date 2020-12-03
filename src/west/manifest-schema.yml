@@ -95,6 +95,21 @@ mapping:
           path:
             required: false
             type: str
+          # Submodules to checkout within the project
+          submodules:
+            required: false
+            type: seq
+            sequence:
+              - type: map
+                mapping:
+                  # Submodule's unique name.
+                  name:
+                    required: true
+                    type: str
+                  # Path to check out, relative to the project's root.
+                  path:
+                    required: true
+                    type: str
           # Limits the clone depth of the project if given.
           clone-depth:
             required: false

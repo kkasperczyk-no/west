@@ -43,6 +43,7 @@ What just happened:
 
 - ``west update`` clones the other repositories named in the manifest file,
   creating working trees in the installation directory ``zephyrproject``.
+  It also checkouts submodules if cloned projects have defined any.
 
 Use ``west init -m`` to specify another manifest repository. Use ``--mr`` to
 use a revision other than ``master``. Use ``--mf`` to use a manifest file other

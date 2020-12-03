@@ -424,6 +424,108 @@ def test_update_some_with_imports(repos_tmpdir):
     manifest = Manifest.from_file(topdir=ws)
     assert manifest.get_projects(['Kconfiglib'])[0].is_cloned()
 
+def test_update_submodules(repos_tmpdir):
+    # The west update command should not only update projects,
+    # but also its submodules. Test uses two pairs of project
+    # and submodule checking out submodule in the default
+    # and custom location to verify both cases.
+
+    # Repositories paths
+    remotes = repos_tmpdir / 'repos'
+    # tagged_repo is zephyr's submodule and will be updated
+    # in the default location (i.e. zephyr/tagged_repo).
+    zephyr = remotes / 'zephyr'
+    tagged_repo = remotes / 'tagged_repo'
+    # Kconfiglib is net_tools's submodule and will be updated
+    # in the custom location (i.e. net-tools/third_parties/Kconfiglib).
+    net_tools = remotes / 'net-tools'
+    kconfiglib = remotes / 'Kconfiglib'
+    kconfiglib_submodule = 'third_parties/Kconfiglib'
+
+    # Creating west workspace and manifest repository.
+    ws = repos_tmpdir / 'ws'
+    create_workspace(ws, and_git=True)
+    manifest_repo = ws / 'mp'
+    create_repo(manifest_repo)
+
+    # Commit west.yml describing projects and submodules dependencies.
+    add_commit(manifest_repo, 'manifest repo commit',
+               files={'west.yml':
+                      f'''
+                      manifest:
+                        projects:
+                        - name: zephyr
+                          url: {zephyr}
+                          submodules:
+                            - name: tagged_repo
+                              path: tagged_repo
+                        - name: net-tools
+                          url: {net_tools}
+                          submodules:
+                            - name: Kconfiglib
+                              path: {kconfiglib_submodule}
+                       '''})
+    cmd(f'init -l {manifest_repo}')
+
+    # Make tagged_repo to be zephyr project submodule.
+    subprocess.check_call(
+        [GIT, 'submodule', 'add', tagged_repo, 'tagged_repo'], cwd=zephyr)
+    # Commit changes to the zephyr repo.
+    add_commit(zephyr, 'zephyr submodule change commit')
+
+    # Make Kconfiglib to be net-tools project submodule.
+    subprocess.check_call(
+        [GIT, 'submodule', 'add', kconfiglib, kconfiglib_submodule],
+        cwd=net_tools)
+    # Commit changes to the net-tools repo.
+    add_commit(net_tools, 'net-tools submodule change commit')
+
+    # Get parsed data from the manifest.
+    manifest = Manifest.from_file(topdir=ws, import_flags=MIF.IGNORE_PROJECTS)
+    projects = manifest.get_projects(['zephyr', 'net-tools'])
+    zephyr_project = projects[0]
+    net_tools_project = projects[1]
+
+    # Verify if tagged_repo submodule data are correct.
+    assert zephyr_project.submodules
+    assert zephyr_project.submodules[0]['name'] == 'tagged_repo'
+    assert zephyr_project.submodules[0]['path'] == 'tagged_repo'
+
+    # Verify if Kconfiglib submodule data are correct.
+    assert net_tools_project.submodules
+    assert net_tools_project.submodules[0]['name'] == 'Kconfiglib'
+    assert net_tools_project.submodules[0]['path'] == kconfiglib_submodule
+
+    # Check if projects repos are cloned - should not be.
+    assert not zephyr_project.is_cloned()
+    assert not net_tools_project.is_cloned()
+
+    # Update only zephyr project.
+    cmd('update zephyr', cwd=ws)
+
+    # Verify if only zephyr project was cloned.
+    assert zephyr_project.is_cloned()
+    assert not net_tools_project.is_cloned()
+
+    # Verify if tagged-repo submodule was also cloned
+    res = zephyr_project.git('rev-parse --show-cdup', check=False,
+                             cwd=os.path.join(zephyr, 'tagged_repo'),
+                             capture_stderr=True, capture_stdout=True)
+    assert not (res.returncode or res.stdout.strip())
+
+    # Update all projects
+    cmd('update', cwd=ws)
+
+    # Verify if both projects were cloned
+    assert zephyr_project.is_cloned()
+    assert net_tools_project.is_cloned()
+
+    # Verify if Kconfiglib submodule was also cloned
+    res = net_tools_project.git('rev-parse --show-cdup', check=False,
+                                cwd=os.path.join(net_tools,
+                                                 kconfiglib_submodule),
+                                capture_stderr=True, capture_stdout=True)
+    assert not (res.returncode or res.stdout.strip())
 
 def test_update_recovery(tmpdir):
     # Make sure that the final 'west update' can recover from the
